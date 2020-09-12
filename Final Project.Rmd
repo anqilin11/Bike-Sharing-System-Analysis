@@ -1,0 +1,301 @@
+---
+title: "Regression Analysis: Bike Sharing System"
+author: Anne Lin
+date: "5/24/2020"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+library(knitr)
+knitr::opts_chunk$set(fig.path = 'figures/', fig.pos = 'htb!', echo = TRUE)
+knit_hooks$set(plot = function(x, options)  {
+  hook_plot_tex(x, options)
+})
+```
+
+\centering
+
+
+\raggedright
+
+### 1. Introduction
+### 2. Questions of Interest
+### 3. Regression Method
+### 4. Regression Analysis, Results, and Interpretation
+### 5. Conclusion
+### 6. Appendix
+
+\newpage
+
+# 1. Introduction
+
+This project will be focused on studying the daily count of bike-sharing rental of registered user in the dataset of two-year historical log corresponding to years 2011 and 2012 from Capital Bikeshare system, Washington D.C., USA from the UC Irvine Machine Learning Repository. This dataset contains 731 observations with 16 variables. We will select several variables and we want to investigate whether the total count of daily registered users can be predicted by those. The variables we selected are the daily **"feels-like" temperature**, **humidity**, **windspeed**, and whether the day is **holiday**. Our goal is to work out a good model for predicting the daily count of bike-sharing rental of registered user under specific conditions using these variables.
+  
+
+# 2. Question of Interest
+
+* **Question 1:** Are variables "feels-like" temperature, humidity, windspeed, and whether the day is holiday good variables for predicting the total daily count of bike rental? Are there interrelations between each predictors?
+
+* **Question 2:** What will the final model be?
+
+* **Question 3:** What will be the daily count of registered bike rental users on holiday with 25 degree celcius "feeling temperature", 20% humidity and 23 windspeed? What is the prediction interval for 95% confidence?
+
+# 3. Regression Method
+
+We will firstly define variables we want to predict and then draw the scatterplot matrix to have a general idea of the relationships between variables. To address the question that whether variables have interactions with each other, we will apply a hypothesis test using F-test (check for independence of variable). In addition to checking interactions, we also want to check if predictors has quadractic relationship with the response using F-test. After checking whether or not to include quadractic relationships and to determine the model, we will use the `step()` function to find good variables related to our model. After determining approprieate variables, we want to make sure that our model satisfies four "LINE" conditions. We will draw Residuals vs. Fit plot to check for linearity and Q-Q plot to check that the residuals are normally distirbuted. According to the Residuals vs. Fit plot and Q-Q plot, we will determine whether we want to do transformations on predictors $x$ or response $Y$. To determine what transformation we want to use on $Y$, we will use `boxcox()` function and see the value of $\lambda$. After doing all the transformations, we will reach a conclusion on what model is best for prediction using the variables we selected. To improve the accuracy of our prediction, we will use studentized residuals to check for outliers and use the criteria that the diagonal value of hat matrix $h_{ii}>3\frac{p}{n}$ to check for high leverage points. After removing all the influencial points, we will fit the model again and then calculate the accurate coefficients for each predictor using `summary()` function. To predict the daily count of registered users given the criteria we set, we can use `predict()` function. We can also get a prediction interval for the target amount we have in the Question of Interest.
+
+
+# 4. Regression Analysis, Results, and Interpretation
+
+We will begin our analysis by building the model. Define our variables as follows:
+
+* $Y$: daily count
+
+* $x_1$: "feels-like" temperature
+
+* $x_2$: humidity
+
+* $x_3$: windspeed
+
+* $x_4$: holiday (1: yes; 0: no)
+
+Now suppose our model is of the basic form $$Y = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\epsilon_i.$$
+
+The first step is to get a general understanding of relations between variables. To do this, we wiil draw the scatterplot matrix using `pair()` function. We expect that there are linear relatinships between predictors and response. The results are as follows:
+```{r,echo=FALSE}
+bike <- read.csv("day.csv")
+feeltemp <- (bike$atemp)*50
+hum <- bike$hum
+holiday <- bike$holiday
+windspeed<-(bike$windspeed)*67
+count <- bike$registered
+pairs(count~feeltemp+hum+windspeed+holiday,data = bike)
+```
+
+From the matrix we can see that the relation between "feel like" temperature and count is showing a comparatively linear trend, but the relation between humidity and windspeed with count is not showing a clear trend. Also, since the type of holiday variable is categroical, it is difficult for us to see the relationship between holiday and count. Observing the graph, we can observe that there is comparatively no interaction between each other. 
+
+To confirm our assumption, we want to perform the hypothesis test using T-test. Since there are 4 variables, we want to include 6 interactions between each other. Therefore, our full model is $$Y = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\beta_5(x_1\times x_2)+\beta_6(x_1\times x_3)+\beta_7(x_1\times x_4)+\beta_8(x_2\times x_3)+\beta_9(x_2\times x_4)+\beta_{10}(x_3\times x_4)+\epsilon_i,$$ and our reduced model is $$Y = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\epsilon_i$$. From this, we can determine that our null hypothesis $H_0$ is $\beta_5=\beta_6=\beta_7=\beta_8=\beta_9=\beta_{10}=0$ and our althernative hypothesis $H_1$ is that at least one of $\beta_k$, $k=5,6,7,8,9,10$ is not zero. Then we will perform an F-test as follows:
+```{r,echo = FALSE}
+fit<-lm(count~feeltemp+hum+windspeed+holiday)
+fit_full<-lm(count~feeltemp+hum+windspeed+holiday+I(feeltemp*hum)+I(feeltemp*windspeed)+I(feeltemp*holiday)+I(hum*windspeed)+I(hum*holiday)+I(windspeed*holiday))
+anova(fit,fit_full)
+```
+
+Since the p-value is $0.4696 >0.05$, we fail to reject the null hypothesis. This means that $\beta_5=\beta_6=\beta_7=\beta_8=\beta_9=\beta_{10}=0$, so there is no interaction between the four variables we determined. Since we excluded the chance that there are interrelation between variables, our model now becomes $Y = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\epsilon_i$.
+
+In addition to checking the interactions between variables, we also want to see if the relation between response and predictor is of degree 2. In this case our full model is $$Y = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\beta_5(x_1^2)+\beta_6(x_2^2)+\beta_7(x_3^2)+\beta_8(x_4^2)+\epsilon_i,$$ and our reduced model is $$Y = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\epsilon_i.$$ From this, we can determine that our null hypothesis $H_0$ is $\beta_5=\beta_6=\beta_7=\beta_8=0$ and our althernative hypothesis $H_1$ is that at least one of $\beta_k$, $k=5,6,7,8$ is not zero. Then we will perform an F-test as follows:
+```{r,echo = FALSE}
+fit<-lm(count~feeltemp+hum+windspeed+holiday)
+fit_full_new<-lm(count~feeltemp+hum+windspeed+holiday+I(feeltemp**2)+I(hum**2)+I(windspeed**2)+I(holiday**2))
+anova(fit,fit_full_new)
+```
+
+Since the p-value is 2.2e-16 < 0.05, we reject null hypothesis. Therefore, at least one of $\beta_k$, $k=5,6,7,8$ is not zero. Since we want to determine on which variables are best suited for predicting values of $Y$, we will perform a stepwise regression with AIC using `step()` function. The simplified result is as follows:
+
+![](step.png)
+
+By running the `step()` function, we decided that feeltemp, hum, windspeed, holiday, feeltemp^2 and hum^2 are good predictor for our model. Now our model becomes $$Y = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\beta_5(x_1^2)+\beta_6(x_2^2)+\epsilon_i.$$
+Since we included all of useful predictors in our model, we will draw Residuals vs. Fit plot and Q-Q plot to see if our model fits the four "LINE" conditions.
+
+```{r,echo = FALSE}
+new_fit<-lm(count~feeltemp+hum+windspeed+holiday+I(feeltemp**2)+I(hum**2))
+yhat = fitted(new_fit)
+y_redsidual = count - yhat
+```
+
+```{r, out.width='1\\linewidth', fig.asp=0.5, fig.ncol = 1,fig.align = "center",echo = FALSE}
+par(mfrow = c(1, 2))
+plot(yhat, y_redsidual, xlab = 'Fitted Values', ylab = 'Residual', main = 'Residual vs Fit')
+abline(h = 0, lty = 2)
+qqnorm(y_redsidual)
+qqline(y_redsidual)
+```
+
+We can observe that, comparatively, the Residuals vs. Fit plot is well-behaved except for several outliers, but the Q-Q plot is diverging on both tails, showing that we have heavy-tailed residuals. In this case, the problem with our model is that the errors are not normally distributed. Hence, we want to make transformation on response $Y$. We use `boxcox()` function to determine what transformation we need to do on $Y$
+
+```{r, echo = FALSE}
+library(MASS)
+boxcox(new_fit,lambda = seq(0.55,0.65,0.001))
+```
+
+From the boxcox plot, we can see that $\lambda$ is around 0.63, so we take $Y$ to the power of 0.63 and see if our Residuals vs. Fit plot and Q-Q plot are improved.
+```{r, echo = FALSE}
+fit_transformed = lm(I((count)**(0.63))~feeltemp+hum+windspeed+holiday+I(feeltemp**2)+I(hum**2))
+yhat_transformed = fitted(fit_transformed)
+y_redsidual_transformed = (count)**(0.63) - yhat_transformed
+```
+
+```{r, out.width='1\\linewidth', fig.asp=0.5, fig.ncol = 1,fig.align = "center",echo = FALSE}
+par(mfrow = c(1, 2))
+plot(yhat_transformed, y_redsidual_transformed, xlab = 'Fitted Values', ylab = 'Residual', main = 'Residual vs Fit')
+abline(h = 0, lty = 2)
+qqnorm(y_redsidual_transformed)
+```
+
+Now we can see that both the Residuals vs. Fit plot and the Q-Q plot are improved than before in the way that the Residuals vs. Fit plot is more well-behaved, and Q-Q plot no longer has "heavy-tail" problem and it is showing a linear trend. We can conclude that our new model is better than before, and it satisfies the four “LINE” condition according to diagnostic plots.
+
+Our final model is $$Y^{0.63}  = \beta_0+\beta_1x_1+\beta_2x_2+\beta_3x_3+\beta_4x_4+\beta_5(x_1^2)+\beta_6(x_2^2)+\epsilon_i$$
+
+However, there are still some outliers for Residuals vs. Fit plot and it is not perfectly well-behaved, so we will try to remove outliers and hig leverage points. To remove the outliers, we will firstly find  studentized residuals using `rstudent()` function.
+```{r, echo = FALSE}
+outliers = which(abs(rstudent(fit_transformed))>3)
+bike<-bike[-outliers,]
+```
+After identified and removed outliers, we want to exclude high leverage points. We use the critera $h_{ii} > 3\frac{p}{n}$ to check for high leverage points. Here $h_ii$ being the diagonal elements of the Hat matrix, $p$ being the number of variables in our model and $n$ being the number of observations we have. After identified high leverage points, we will remove them from our dataset.
+```{r, echo = FALSE}
+p = 5
+n = 730
+high_leverage = which(hatvalues(fit_transformed)>3*(p/n))
+bike<-bike[-high_leverage,]
+```
+After excluding the high leverage points, we need to fit the model again using the cleaned dataset. After that, to confirm that our model now is improved and more accurate than before, we will draw Residuals vs. Fit plot and Q-Q plot again.
+```{r,echo = FALSE}
+feeltemp <- (bike$atemp)*50
+hum <- bike$hum
+holiday <- bike$holiday
+windspeed<-(bike$windspeed)*67
+count <- bike$registered
+fit_transformed = lm(I((count)**(0.63))~feeltemp+hum+windspeed+holiday+I(feeltemp**2)+I(hum**2))
+yhat_transformed = fitted(fit_transformed)
+y_redsidual_transformed = (count)**(0.63) - yhat_transformed
+```
+
+```{r, out.width='1\\linewidth', fig.asp=0.5, fig.ncol = 1,fig.align = "center",echo = FALSE}
+par(mfrow = c(1, 2))
+plot(yhat_transformed, y_redsidual_transformed, xlab = 'Fitted Values', ylab = 'Residual', main = 'Residual vs Fit')
+abline(h = 0, lty = 2)
+qqnorm(y_redsidual_transformed)
+```
+
+We can see that the Residuals vs. Fit plot imporved a lot and now it is well-behaved. Now to get the accurate coefficients of our model, we will use `summary()` function.
+```{r, echo = FALSE}
+summary(fit_transformed)
+```
+
+From the table above, our detailed final model is $$Y^{0.63}  = -53.04854+15.71531x_1+239.44000x_2-1.48785 x_3-42.10589x_4-0.26378x_1^2-272.29754x_2^2+\epsilon_i$$
+
+If the day is holiday, $x_4 =1$, so $$Y^{0.63}  = -95.15443+-53.04854+15.71531x_1+239.44000x_2-1.48785 x_3-0.26378x_1^2-272.29754x_2^2+\epsilon_i$$
+
+If the day is not holiday,  $x_{holiday} =0$, so $$Y^{0.63}  = -53.04854+15.71531x_1+239.44000x_2-1.48785 x_3-0.26378x_1^2-272.29754x_2^2+\epsilon_i$$
+
+Now, to get the prediction interval we want from Question of Interest, we will use `predict()` function:
+```{r, echo=FALSE}
+target<- data.frame(holiday = 1, 
+                   feeltemp = 25,
+                   hum = 0.2, 
+                   windspeed = 23)
+predict(fit_transformed,target, interval = "prediction", level = 0.95, type = "response")
+```
+
+The predicted value is 135.6415. Since we did transformation on $Y$, we need to transform the number back. $135.6415^{1/0.63}= 2425.214 \approx 2425$. Also, the prediction interval we get is $(52.20805, 219.0749)$. Doing the same transformation, we have $52.20805^{1/0.63} = 532.8039$ and $219.0749^{1/0.63} = 5190.705$. Then the 95% prediction interval now becomes $(532.8039, 5190.705)$
+
+# 5. Conclusion
+
+To address our three questions of interests, we concludes that, firstly, variables "feels-like" temperature, humidity, windspeed, and whether the day is holiday are all good variables for predicting the total daily count of bike rental users. There is no interrelations between them. After doing several hypothesis tests and a stepwise regression with AIC, our final model is $$Y^{0.63}  = -53.04854+15.71531x_1+239.44000x_2-1.48785 x_3-42.10589x_4-0.26378x_1^2-272.29754x_2^2+\epsilon_i$$. If the day is holiday, $x_4 =1$, so $$Y^{0.63}  = -95.15443+-53.04854+15.71531x_1+239.44x_2-1.48785 x_3-0.26378x_1^2-272.29754x_2^2+\epsilon_i;$$
+and if the day is not holiday,  $x_4 =0$, so $$Y^{0.63}  = -53.04854+15.71531x_1+239.44x_2-1.48785 x_3-0.26378x_1^2-272.29754x_2^2+\epsilon_i.$$ The predicted daily count of registered users for daily count of registered bike rental on holiday with 25 degree celcius "feeling temperature", 20% humidity and 23 windspeed is $2425$ registered users, and we are 95% confidence that the prediction is in the interval $(532.8039, 5190.705)$.
+
+# 6. Appendix
+```{r,eval = FALSE}
+#load dataset and selected variables
+bike <- read.csv("day.csv")
+feeltemp <- (bike$atemp)*50
+hum <- bike$hum
+holiday <- bike$holiday
+windspeed<-(bike$windspeed)*67
+count <- bike$registered
+
+
+#draw scatterplot matrix
+pairs(count~feeltemp+hum+windspeed+holiday,data = bike)
+
+
+#check interrelation
+fit<-lm(count~feeltemp+hum+windspeed+holiday)
+fit_full<-lm(count~feeltemp+hum+windspeed+holiday+
+               I(feeltemp*hum)+I(feeltemp*windspeed)+I(feeltemp*holiday)+
+               I(hum*windspeed)+I(hum*holiday)+I(windspeed*holiday))
+anova(fit,fit_full)
+
+
+#check for second degree relationship
+fit<-lm(count~feeltemp+hum+windspeed+holiday)
+fit_full_new<-lm(count~feeltemp+hum+windspeed+holiday+
+                   I(feeltemp**2)+I(hum**2)+I(windspeed**2)+I(holiday**2))
+anova(fit,fit_full_new)
+
+
+#step procedure
+mod0 <- lm(count~1)
+mod.upper <- fit_full_new
+step(mod0,scope = list(lower = mod0, upper=mod.upper))
+
+
+#draw Residuals vs. Fit plot and Q-Q plot
+new_fit<-lm(count~feeltemp+hum+windspeed+holiday+I(feeltemp**2)+I(hum**2))
+yhat = fitted(new_fit)
+y_redsidual = count - yhat
+plot(yhat, y_redsidual, 
+     xlab = 'Fitted Values', ylab = 'Residual', main = 'Residual vs Fit')
+abline(h = 0, lty = 2)
+qqnorm(y_redsidual))
+qqline(y_redsidual)
+
+
+#boxcox
+library(MASS)
+boxcox(new_fit,lambda = seq(0.55,0.65,0.001))
+
+
+#transformed Y
+fit_transformed = lm(I((count)**(0.63))~feeltemp+hum+windspeed+holiday+I(feeltemp**2)+I(hum**2))
+yhat_transformed = fitted(fit_transformed)
+y_redsidual_transformed = (count)**(0.63) - yhat_transformed
+plot(yhat_transformed, y_redsidual_transformed, 
+     xlab = 'Fitted Values', ylab = 'Residual', main = 'Residual vs Fit')
+abline(h = 0, lty = 2)
+qqnorm(y_redsidual_transformed)
+
+
+#reomove outliers
+rs = abs(rstudent(fit_transformed))
+rs[rs>3]
+bike<-bike[-c(668),]
+
+#remove high leverage points
+p = 5
+n = 730
+high_leverage = which(hatvalues(fit_transformed)>3*(p/n))
+bike<-bike[-high_leverage,]
+
+
+#fit the model again
+feeltemp <- (bike$atemp)*50
+hum <- bike$hum
+holiday <- bike$holiday
+windspeed<-(bike$windspeed)*67
+count <- bike$registered
+fit_transformed = lm(I((count)**(0.63))~feeltemp+hum+windspeed+holiday+I(feeltemp**2)+I(hum**2))
+yhat_transformed = fitted(fit_transformed)
+y_redsidual_transformed = (count)**(0.63) - yhat_transformed
+
+
+#draw Residuals vs. Fit plot and Q-Q plot
+plot(yhat_transformed, 
+     y_redsidual_transformed, 
+     xlab = 'Fitted Values', 
+     ylab = 'Residual', 
+     main = 'Residual vs Fit')
+abline(h = 0, lty = 2)
+qqnorm(y_redsidual_transformed)
+
+#t-test
+summary(fit_transformed)
+
+
+#make prediction
+target<- data.frame(holiday = 1, 
+                   feeltemp = 25,
+                   hum = 0.2, 
+                   windspeed = 23)
+predict(fit,target, interval = "confidence", level = 0.95, type = "response")
+```
